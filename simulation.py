@@ -18,6 +18,10 @@ MARGEM_TELA = 18
 MOVIMENTO_FPS = 4
 MOVIMENTO_FPS_MIN = 1
 MOVIMENTO_FPS_MAX = 12
+# Se quiser fixar algumas esferas manualmente, adicione aqui uma lista de tuplas (x, y).
+# Exemplo: MANUAL_ESFERAS = [(5,3), (10,8)]
+# Deixe vazia para usar apenas seleção aleatória.
+MANUAL_ESFERAS: list[tuple[int, int]] = [(1,1), (2,1), (1,5), (1, 6), (3, 4), (4, 17), (5, 5)]
 
 
 class Simulacao:
@@ -30,16 +34,20 @@ class Simulacao:
 
         largura_tela, altura_tela = self.tela.get_size()
         global TAMANHO_CELULA
-        tamanho_celula_horizontal = max(12, (largura_tela - PAINEL_LARGURA - (MARGEM_TELA * 3)) // TAMANHO_MAPA)
+        # largura disponível agora ignora o painel lateral (usar toda a largura)
+        tamanho_celula_horizontal = max(12, (largura_tela - (MARGEM_TELA * 3)) // TAMANHO_MAPA)
         tamanho_celula_vertical = max(12, (altura_tela - (MARGEM_TELA * 2)) // TAMANHO_MAPA)
         # fator para reduzir o tamanho visual do mapa (0 < fator <= 1). Ajuste conforme desejar.
         self._map_scale_factor = 0.85
         TAMANHO_CELULA = max(8, int(max(12, min(tamanho_celula_horizontal, tamanho_celula_vertical)) * self._map_scale_factor))
 
         self.tamanho_mapa_px = TAMANHO_MAPA * TAMANHO_CELULA
-        self.sidebar_largura = PAINEL_LARGURA
-        self.mapa_offset_x = self.sidebar_largura + (MARGEM_TELA * 2)
-        self.mapa_offset_y = MARGEM_TELA + 75
+        # centraliza o mapa na tela (reserva espaço inferior para a HUD)
+        self.sidebar_largura = 0
+        bar_height = 72
+        self.mapa_offset_x = max(MARGEM_TELA, (largura_tela - self.tamanho_mapa_px) // 2)
+        # centraliza verticalmente considerando a barra inferior
+        self.mapa_offset_y = max(MARGEM_TELA, (altura_tela - bar_height - self.tamanho_mapa_px) // 2)
         self.quantidade_esferas = QUANTIDADE_ESFERAS
         self.radar_alcance = RADAR_ALCANCE
 
@@ -71,7 +79,7 @@ class Simulacao:
         # ajuste: fator relativo ao tamanho da janela (1.0 = preencher totalmente)
         self._fundo_scale_factor = 1.0
         try:
-            caminho_fundo = r"C:\Users\Pichau\Desktop\Outros\Inteligencia Artificial\EsferasDragao\img\goku3gemini.jpg"
+            caminho_fundo = r"C:\Users\Pichau\Desktop\Outros\Inteligencia Artificial\EsferasDragao\img\goku3geminiMelhorada.jpg"
             if os.path.exists(caminho_fundo):
                 self._fundo_original = pygame.image.load(caminho_fundo).convert()
             ow, oh = self._fundo_original.get_size()
@@ -102,13 +110,33 @@ class Simulacao:
         raise ValueError("Não foi possível localizar a Ilha do Mestre Kame no mapa.")
 
     def gerar_esferas(self, rng: random.Random, inicio: Tuple[int, int]) -> set[Tuple[int, int]]:
+        # usa posições manuais definidas em MANUAL_ESFERAS (se houver) e completa o resto aleatoriamente
+        manual_validas: list[Tuple[int, int]] = []
+        for p in MANUAL_ESFERAS:
+            try:
+                x, y = int(p[0]), int(p[1])
+            except Exception:
+                continue
+            if 0 <= x < TAMANHO_MAPA and 0 <= y < TAMANHO_MAPA and (x, y) != inicio:
+                if (x, y) not in manual_validas:
+                    manual_validas.append((x, y))
+        # Se o usuário forneceu posições manuais, use somente elas (cortando se houver mais que o desejado)
+        if manual_validas:
+            return set(manual_validas[: self.quantidade_esferas])
+
+        # Senão, gera tudo aleatoriamente como antes
         candidatas = [
             (x, y)
             for y in range(TAMANHO_MAPA)
             for x in range(TAMANHO_MAPA)
             if (x, y) != inicio
         ]
-        return set(rng.sample(candidatas, self.quantidade_esferas))
+        restantes = max(0, self.quantidade_esferas)
+        if restantes > len(candidatas):
+            restantes = len(candidatas)
+
+        aleatorias = rng.sample(candidatas, restantes) if restantes else []
+        return set(aleatorias)
 
     def distancia_chebyshev(self, a: Tuple[int, int], b: Tuple[int, int]) -> int:
         return max(abs(a[0] - b[0]), abs(a[1] - b[1]))
