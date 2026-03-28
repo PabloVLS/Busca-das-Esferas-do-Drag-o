@@ -196,6 +196,7 @@ class HUD:
             ("Custo", f"{simulacao.custo_acumulado}", (255, 193, 77), "custo"),
             ("Tempo", simulacao.formatar_tempo(simulacao.tempo_decorrido_ms()), (132, 187, 245), "tempo"),
             ("Esferas", f"{len(simulacao.esferas_coletadas)}/{simulacao.quantidade_esferas}", (119, 219, 155), "esfera"),
+            ("Rota", simulacao.texto_rota_em_andamento(), (255, 208, 143), "fase"),
             ("Velocidade", f"{simulacao.movimento_fps} fps", (186, 196, 245), "velocidade"),
             ("Fase", simulacao.fase_atual(), (160, 213, 245), "fase"),
         ]
@@ -230,20 +231,23 @@ class HUD:
             x_atual += largura_chip + 14
 
         # Botões elegantes
-        largura_botao = 170
+        largura_botao = 110
         altura_botao = 42
-        espacamento_botoes = 14
-        margem_direita = 26
+        espacamento_botoes = 10
+        margem_direita = 24
 
         x_botao_rapido = largura_tela - margem_direita - largura_botao
         x_botao_lento = x_botao_rapido - espacamento_botoes - largura_botao
+        x_botao_toggle = x_botao_lento - espacamento_botoes - largura_botao
         y_botao = 10
 
         botao_mais_devagar = pygame.Rect(x_botao_lento, y_botao, largura_botao, altura_botao)
         botao_mais_rapido = pygame.Rect(x_botao_rapido, y_botao, largura_botao, altura_botao)
+        botao_toggle_esferas = pygame.Rect(x_botao_toggle, y_botao, largura_botao, altura_botao)
 
         hover_lento = botao_mais_devagar.collidepoint(mouse_local)
         hover_rapido = botao_mais_rapido.collidepoint(mouse_local)
+        hover_toggle = botao_toggle_esferas.collidepoint(mouse_local)
 
         self.desenhar_botao_moderno(
             barra,
@@ -263,6 +267,16 @@ class HUD:
             (102, 174, 133),
             (134, 204, 164),
             hover_rapido,
+            None,
+        )
+        self.desenhar_botao_moderno(
+            barra,
+            botao_toggle_esferas,
+            "Ocultar" if simulacao.mostrar_esferas_ocultas else "Mostrar",
+            "Esferas",
+            (110, 132, 190),
+            (140, 160, 214),
+            hover_toggle,
             None,
         )
 
@@ -285,6 +299,7 @@ class HUD:
         return {
             "mais_devagar": botao_mais_devagar.move(0, y_barra),
             "mais_rapido": botao_mais_rapido.move(0, y_barra),
+            "toggle_esferas": botao_toggle_esferas.move(0, y_barra),
         }
 
     def desenhar_botao(self, superficie: pygame.Surface, rect: pygame.Rect, titulo: str, subtitulo: str, cor_base: tuple[int, int, int], cor_borda: tuple[int, int, int]) -> None:

@@ -18,10 +18,18 @@ MARGEM_TELA = 18
 MOVIMENTO_FPS = 4
 MOVIMENTO_FPS_MIN = 1
 MOVIMENTO_FPS_MAX = 12
+TERRENO_DESCONHECIDO_PADRAO = 0
+PENALIDADE_AGUA_PASSO = 8
+PENALIDADE_MONTANHA_PASSO = 35
+PENALIDADE_AGUA_DESTINO = 20
+PENALIDADE_MONTANHA_DESTINO = 90
+AGENTE_IMAGEM_CAMINHO = r"C:\Users\Pichau\Desktop\Outros\Inteligencia Artificial\EsferasDragao\img\GokuPixel.png"
+FATOR_ESCURECER_NAO_PERCORRIDO = 0.70
+FATOR_ESCURECER_DETECTADO_RADAR = 0.99
 # Se quiser fixar algumas esferas manualmente, adicione aqui uma lista de tuplas (x, y).
 # Exemplo: MANUAL_ESFERAS = [(5,3), (10,8)]
 # Deixe vazia para usar apenas seleção aleatória.
-MANUAL_ESFERAS: list[tuple[int, int]] = [(1,1), (2,1), (1,5), (1, 6), (3, 4), (4, 17), (5, 5)]
+MANUAL_ESFERAS: list[tuple[int, int]] = [(0, 0), (1, 0),(2, 0), (3, 0), (41, 41),(40, 41), (39, 41)]
 
 
 class Simulacao:
@@ -59,9 +67,11 @@ class Simulacao:
         self.esferas_coletadas: set[Tuple[int, int]] = set()
         self.caminho_percorrido: list[Tuple[int, int]] = [self.inicio]
         self.custo_acumulado = 0
-        self.waypoints = self.gerar_waypoints()
-        self.waypoint_cursor = 0
+        self.celulas_conhecidas: set[Tuple[int, int]] = set()
+        self.terreno_conhecido: dict[Tuple[int, int], int] = {}
         self.movimento_fps = MOVIMENTO_FPS
+        self.mostrar_esferas_ocultas = False
+        self.passos_rota_em_andamento = 0
         self.rodando = True
         self.concluida = False
         self.mensagem_final = ""
@@ -92,6 +102,21 @@ class Simulacao:
         except Exception:
             self._fundo_original = None
             self._fundo_scaled = None
+
+        # carregar sprite do agente (fallback para círculo caso falhe)
+        self._agente_sprite_original = None
+        self._agente_sprite_escalado = None
+        self._agente_sprite_tamanho_px = 0
+        try:
+            caminho_agente = AGENTE_IMAGEM_CAMINHO
+            if not os.path.exists(caminho_agente):
+                caminho_agente = os.path.join(os.path.dirname(__file__), "img", "GokuPixel.png")
+            if os.path.exists(caminho_agente):
+                self._agente_sprite_original = pygame.image.load(caminho_agente).convert_alpha()
+        except Exception:
+            self._agente_sprite_original = None
+
+        self.atualizar_mapa_conhecido()
 
     def fase_atual(self) -> str:
         if self.concluida:
@@ -141,15 +166,120 @@ class Simulacao:
     def distancia_chebyshev(self, a: Tuple[int, int], b: Tuple[int, int]) -> int:
         return max(abs(a[0] - b[0]), abs(a[1] - b[1]))
 
-    def gerar_waypoints(self) -> list[Tuple[int, int]]:
-        centros = list(range(RADAR_ALCANCE, TAMANHO_MAPA, RADAR_ALCANCE * 2 + 1))
-        waypoints: list[Tuple[int, int]] = []
-        for indice_y, y in enumerate(centros):
-            linha = [(x, y) for x in centros]
-            if indice_y % 2 == 1:
-                linha.reverse()
-            waypoints.extend(linha)
-        return waypoints
+    def celulas_no_alcance_do_radar(self, centro: Tuple[int, int]) -> list[Tuple[int, int]]:
+        celulas: list[Tuple[int, int]] = []
+        for y in range(max(0, centro[1] - self.radar_alcance), min(TAMANHO_MAPA, centro[1] + self.radar_alcance + 1)):
+            for x in range(max(0, centro[0] - self.radar_alcance), min(TAMANHO_MAPA, centro[0] + self.radar_alcance + 1)):
+                if self.distancia_chebyshev(centro, (x, y)) <= self.radar_alcance:
+                    celulas.append((x, y))
+        return celulas
+
+    def atualizar_mapa_conhecido(self) -> set[Tuple[int, int]]:
+        novas_celulas: set[Tuple[int, int]] = set()
+        for posicao in self.celulas_no_alcance_do_radar(self.posicao):
+            if posicao not in self.celulas_conhecidas:
+                novas_celulas.add(posicao)
+            self.celulas_conhecidas.add(posicao)
+            self.terreno_conhecido[posicao] = mapa[posicao[1]][posicao[0]]
+        return novas_celulas
+
+    def detectar_fronteiras(self) -> set[Tuple[int, int]]:
+        fronteiras: set[Tuple[int, int]] = set()
+        for posicao in self.celulas_conhecidas:
+            for vizinha in a_star.planejador.obter_posicoes_vizinhas(posicao):
+                if vizinha not in self.celulas_conhecidas:
+                    fronteiras.add(posicao)
+                    break
+        return fronteiras
+
+    def calcular_ganho_informacao(self, frontier: Tuple[int, int]) -> int:
+        ganho = 0
+        for posicao in self.celulas_no_alcance_do_radar(frontier):
+            if posicao not in self.celulas_conhecidas:
+                ganho += 1
+        return ganho
+
+    def construir_mapa_planejamento(self) -> list[list[int]]:
+        mapa_estimado: list[list[int]] = []
+        for y in range(TAMANHO_MAPA):
+            linha: list[int] = []
+            for x in range(TAMANHO_MAPA):
+                posicao = (x, y)
+                if posicao in self.terreno_conhecido:
+                    linha.append(self.terreno_conhecido[posicao])
+                else:
+                    linha.append(TERRENO_DESCONHECIDO_PADRAO)
+            mapa_estimado.append(linha)
+        return mapa_estimado
+
+    def planejar_caminho_a_estrela(
+        self,
+        origem: Tuple[int, int],
+        destino: Tuple[int, int],
+        planejador_estimado: a_star.PlanejadorAEstrela | None = None,
+    ) -> a_star.ResultadoCaminho | None:
+        if origem == destino:
+            return a_star.ResultadoCaminho(caminho=(origem,), custo=0)
+
+        planejador = planejador_estimado or a_star.PlanejadorAEstrela(self.construir_mapa_planejamento())
+        try:
+            return planejador.buscar(origem, destino)
+        except RuntimeError:
+            return None
+
+    def penalidade_terreno(self, terreno: int, destino: bool = False) -> int:
+        if terreno == 2:
+            return PENALIDADE_MONTANHA_DESTINO if destino else PENALIDADE_MONTANHA_PASSO
+        if terreno == 0:
+            return PENALIDADE_AGUA_DESTINO if destino else PENALIDADE_AGUA_PASSO
+        return 0
+
+    def calcular_penalidade_trajeto(self, caminho: a_star.ResultadoCaminho) -> int:
+        penalidade = 0
+        for posicao in caminho.caminho[1:]:
+            terreno = self.terreno_conhecido.get(posicao)
+            if terreno is None:
+                continue
+            penalidade += self.penalidade_terreno(terreno, destino=False)
+        return penalidade
+
+    def selecionar_melhor_fronteira(self) -> tuple[Tuple[int, int], a_star.ResultadoCaminho] | None:
+        fronteiras = self.detectar_fronteiras()
+        if not fronteiras:
+            return None
+
+        planejador_estimado = a_star.PlanejadorAEstrela(self.construir_mapa_planejamento())
+
+        melhor_fronteira: Tuple[int, int] | None = None
+        melhor_caminho: a_star.ResultadoCaminho | None = None
+        melhor_score: float | None = None
+
+        for frontier in fronteiras:
+            if frontier == self.posicao:
+                continue
+
+            caminho = self.planejar_caminho_a_estrela(self.posicao, frontier, planejador_estimado)
+            if caminho is None:
+                continue
+
+            ganho = self.calcular_ganho_informacao(frontier)
+            penalidade_trajeto = self.calcular_penalidade_trajeto(caminho)
+            terreno_destino = self.terreno_conhecido.get(frontier)
+            penalidade_destino = self.penalidade_terreno(terreno_destino, destino=True) if terreno_destino is not None else 0
+            score = caminho.custo - ganho + penalidade_trajeto + penalidade_destino
+
+            if melhor_score is None or score < melhor_score:
+                melhor_score = score
+                melhor_fronteira = frontier
+                melhor_caminho = caminho
+            elif score == melhor_score and melhor_caminho is not None and caminho.custo < melhor_caminho.custo:
+                melhor_fronteira = frontier
+                melhor_caminho = caminho
+
+        if melhor_fronteira is None or melhor_caminho is None:
+            return None
+
+        return melhor_fronteira, melhor_caminho
 
     def tempo_decorrido_ms(self) -> int:
         agora = pygame.time.get_ticks()
@@ -197,6 +327,8 @@ class Simulacao:
             self.desacelerar_movimento()
         elif self.botoes_hud.get("mais_rapido") and self.botoes_hud["mais_rapido"].collidepoint(posicao):
             self.acelerar_movimento()
+        elif self.botoes_hud.get("toggle_esferas") and self.botoes_hud["toggle_esferas"].collidepoint(posicao):
+            self.alternar_visualizacao_esferas()
 
     def acelerar_movimento(self) -> None:
         self.movimento_fps = min(MOVIMENTO_FPS_MAX, self.movimento_fps + 1)
@@ -204,7 +336,28 @@ class Simulacao:
     def desacelerar_movimento(self) -> None:
         self.movimento_fps = max(MOVIMENTO_FPS_MIN, self.movimento_fps - 1)
 
+    def alternar_visualizacao_esferas(self) -> None:
+        self.mostrar_esferas_ocultas = not self.mostrar_esferas_ocultas
+
+    def texto_rota_em_andamento(self) -> str:
+        return f"{self.passos_rota_em_andamento} passos"
+
+    def obter_sprite_agente(self) -> pygame.Surface | None:
+        if self._agente_sprite_original is None:
+            return None
+
+        tamanho_alvo = max(8, int(TAMANHO_CELULA * 1.95))
+        if self._agente_sprite_escalado is None or self._agente_sprite_tamanho_px != tamanho_alvo:
+            self._agente_sprite_escalado = pygame.transform.smoothscale(
+                self._agente_sprite_original,
+                (tamanho_alvo, tamanho_alvo),
+            )
+            self._agente_sprite_tamanho_px = tamanho_alvo
+
+        return self._agente_sprite_escalado
+
     def sondar_radar(self) -> set[Tuple[int, int]]:
+        self.atualizar_mapa_conhecido()
         novos = {
             esfera
             for esfera in self.esferas_ocultas
@@ -216,11 +369,20 @@ class Simulacao:
             self.esferas_detectadas.update(novos)
         return novos
 
+    def coletar_esfera_na_posicao_atual(self) -> bool:
+        if self.posicao in self.esferas_ocultas and self.posicao not in self.esferas_coletadas:
+            self.esferas_detectadas.add(self.posicao)
+            self.esferas_coletadas.add(self.posicao)
+            return True
+        return False
+
     def mover_por_caminho(self, caminho: a_star.ResultadoCaminho) -> bool:
         detectou_nova_esfera = False
+        self.passos_rota_em_andamento = max(0, len(caminho.caminho) - 1)
         for proxima_posicao in caminho.caminho[1:]:
             self.tratar_eventos()
             if not self.rodando:
+                self.passos_rota_em_andamento = 0
                 return detectou_nova_esfera
 
             while self.pausado and self.rodando:
@@ -229,48 +391,47 @@ class Simulacao:
                 self.tratar_eventos()
                 self.relogio.tick(15)
             if not self.rodando:
+                self.passos_rota_em_andamento = 0
                 return detectou_nova_esfera
 
             self.posicao = proxima_posicao
             self.custo_acumulado += a_star.planejador.custo_da_celula(proxima_posicao)
             self.caminho_percorrido.append(proxima_posicao)
+            self.passos_rota_em_andamento = max(0, self.passos_rota_em_andamento - 1)
+
+            # Se pisou diretamente em uma esfera, coleta imediatamente.
+            self.coletar_esfera_na_posicao_atual()
+
+            novos_radar = self.sondar_radar()
             self.desenhar()
             pygame.display.flip()
             self.relogio.tick(self.movimento_fps)
-            if self.sondar_radar():
+            if novos_radar:
                 detectou_nova_esfera = True
                 break
 
+        self.passos_rota_em_andamento = 0
         return detectou_nova_esfera
 
     def explorar_mapa(self) -> bool:
-        detectou_esfera = False
-        total = len(self.waypoints)
-        while self.waypoint_cursor < total:
-            waypoint = self.waypoints[self.waypoint_cursor]
-            if waypoint == self.posicao:
-                if self.sondar_radar():
-                    detectou_esfera = True
-                    break
-                self.waypoint_cursor += 1
-                continue
+        while self.rodando:
+            escolha_fronteira = self.selecionar_melhor_fronteira()
+            if escolha_fronteira is None:
+                return False
 
-            caminho = a_star.caminho_entre(self.posicao, waypoint)
+            _, caminho = escolha_fronteira
             if self.mover_por_caminho(caminho):
-                detectou_esfera = True
-                break
+                return True
             if not self.rodando:
-                break
+                return False
+
             if self.sondar_radar():
-                detectou_esfera = True
-                break
+                return True
 
-            self.waypoint_cursor += 1
+            if self.esferas_detectadas - self.esferas_coletadas:
+                return True
 
-        if self.waypoint_cursor >= total:
-            self.waypoint_cursor = 0
-
-        return detectou_esfera
+        return False
 
     def coletar_esferas(self) -> None:
         while self.rodando and len(self.esferas_coletadas) < self.quantidade_esferas:
@@ -344,10 +505,18 @@ class Simulacao:
             self.tela.blit(fundo, (0, 0))
 
         # mapa
+        percorridas = set(self.caminho_percorrido)
         for y in range(TAMANHO_MAPA):
             for x in range(TAMANHO_MAPA):
                 terreno = mapa[y][x]
                 cor = {1: (0, 170, 0), 0: (25, 90, 210), 2: (125, 80, 30), 3: (255, 60, 60)}[terreno]
+                posicao = (x, y)
+                if posicao in percorridas:
+                    pass
+                elif posicao in self.celulas_conhecidas:
+                    cor = tuple(max(0, int(canal * FATOR_ESCURECER_DETECTADO_RADAR)) for canal in cor)
+                else:
+                    cor = tuple(max(0, int(canal * FATOR_ESCURECER_NAO_PERCORRIDO)) for canal in cor)
                 rect = pygame.Rect(
                     self.mapa_offset_x + x * TAMANHO_CELULA,
                     self.mapa_offset_y + y * TAMANHO_CELULA,
@@ -363,6 +532,15 @@ class Simulacao:
             cx = self.mapa_offset_x + posicao[0] * TAMANHO_CELULA + TAMANHO_CELULA // 2
             cy = self.mapa_offset_y + posicao[1] * TAMANHO_CELULA + TAMANHO_CELULA // 2
             pygame.draw.circle(self.tela, cor, (cx, cy), max(3, TAMANHO_CELULA // 3))
+
+        # esferas ocultas (visualização opcional para espectadores)
+        if self.mostrar_esferas_ocultas:
+            esferas_ocultas_visiveis = self.esferas_ocultas - self.esferas_detectadas - self.esferas_coletadas
+            for posicao in esferas_ocultas_visiveis:
+                cx = self.mapa_offset_x + posicao[0] * TAMANHO_CELULA + TAMANHO_CELULA // 2
+                cy = self.mapa_offset_y + posicao[1] * TAMANHO_CELULA + TAMANHO_CELULA // 2
+                raio = max(3, TAMANHO_CELULA // 3)
+                pygame.draw.circle(self.tela, (255, 255, 0), (cx, cy), raio)
 
         # alcance radar
         x = self.mapa_offset_x + max(0, self.posicao[0] - RADAR_ALCANCE) * TAMANHO_CELULA
@@ -386,8 +564,13 @@ class Simulacao:
         # agente
         px = self.mapa_offset_x + self.posicao[0] * TAMANHO_CELULA + TAMANHO_CELULA // 2
         py = self.mapa_offset_y + self.posicao[1] * TAMANHO_CELULA + TAMANHO_CELULA // 2
-        pygame.draw.circle(self.tela, (255, 255, 255), (px, py), max(4, TAMANHO_CELULA // 2))
-        pygame.draw.circle(self.tela, (255, 0, 0), (px, py), max(2, TAMANHO_CELULA // 3))
+        sprite_agente = self.obter_sprite_agente()
+        if sprite_agente is not None:
+            rect_sprite = sprite_agente.get_rect(center=(px, py))
+            self.tela.blit(sprite_agente, rect_sprite)
+        else:
+            pygame.draw.circle(self.tela, (255, 255, 255), (px, py), max(4, TAMANHO_CELULA // 2))
+            pygame.draw.circle(self.tela, (255, 0, 0), (px, py), max(2, TAMANHO_CELULA // 3))
 
         # HUD
         self.botoes_hud = self.hud.draw_panel(self)
@@ -412,14 +595,23 @@ class Simulacao:
             if not self.rodando:
                 break
 
+            # Se já existem esferas detectadas (ex.: nascer dentro do alcance do radar),
+            # priorize coleta antes de continuar explorando.
+            if self.esferas_detectadas - self.esferas_coletadas:
+                self.coletar_esferas()
+                if not self.rodando:
+                    break
+                # Depois da coleta, volta para o início do loop para reavaliar estado.
+                continue
+
             self.explorar_mapa()
             if not self.rodando:
                 break
 
             if self.esferas_detectadas - self.esferas_coletadas:
                 self.coletar_esferas()
-            if not self.rodando:
-                break
+                if not self.rodando:
+                    break
             if len(self.esferas_coletadas) >= self.quantidade_esferas:
                 break
 
