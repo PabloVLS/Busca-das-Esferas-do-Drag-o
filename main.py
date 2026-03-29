@@ -1,6 +1,5 @@
 import pygame
-from mapa_config import TAMANHO_MAPA
-from simulation import Simulacao, TAMANHO_CELULA, PAINEL_LARGURA, MARGEM_TELA
+from simulation import Simulacao
 
 
 def main() -> None:
@@ -9,10 +8,9 @@ def main() -> None:
     pygame.display.set_caption("Busca das Esferas do Dragão - A*")
     fonte = pygame.font.SysFont("arial", 24, bold=True)
     fonte_pequena = pygame.font.SysFont("arial", 20)
-    fonte_titulo = pygame.font.SysFont("arial", 28, bold=True)
     relogio = pygame.time.Clock()
 
-    simulacao = Simulacao(tela, fonte, fonte_pequena, fonte_titulo, relogio)
+    simulacao = Simulacao(tela, fonte, fonte_pequena, relogio)
     try:
         simulacao.executar()
     finally:

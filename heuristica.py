@@ -26,7 +26,6 @@ Terrenos no mapa (mapa_config.py):
 """
 
 from dataclasses import dataclass
-from functools import lru_cache
 from heapq import heappop, heappush
 from typing import Dict, Iterable, List, Set, Tuple
 
@@ -109,24 +108,11 @@ class PlanejadorAEstrela:
     # ==================================================================================
 
     def posicao_esta_dentro_do_mapa(self, posicao: Posicao) -> bool:
-        """
-        Verifica se uma posição está dentro dos limites do mapa.
-        
-        Importante: Usamos isto para NÃO sair do mapa durante a busca.
-        
-        Args:
-            posicao: Coordenada (x, y) a verificar
-            
-        Returns:
-            True se está dentro do mapa, False caso contrário
-        """
         x, y = posicao
         
-        # Verifica se x está entre 0 e largura-1
         if x < 0 or x >= self.largura:
             return False
         
-        # Verifica se y está entre 0 e altura-1
         if y < 0 or y >= self.altura:
             return False
         
@@ -137,20 +123,6 @@ class PlanejadorAEstrela:
     # ==================================================================================
 
     def custo_da_celula(self, posicao: Posicao) -> int:
-        """
-        Retorna o custo para ENTRAR em uma célula.
-        
-        Exemplo:
-            - Pisar em grama custa 1
-            - Pisar em água custa 10
-            - Pisar em montanha custa 60
-        
-        Args:
-            posicao: Coordenada (x, y) da célula
-            
-        Returns:
-            Custo (número inteiro) para entrar nessa célula
-        """
         x, y = posicao
         tipo_de_terreno = self.mapa[y][x]
 
@@ -164,24 +136,6 @@ class PlanejadorAEstrela:
     # ==================================================================================
 
     def calcular_heuristica(self, posicao_atual: Posicao, posicao_objetivo: Posicao) -> int:
-        """
-        Calcula uma ESTIMATIVA de custo até o objetivo (heurística).
-        
-        Usamos distância Manhattan (também chamada de "distância de táxi"):
-            - Soma a distância em X com a distância em Y
-            - Válida quando você só pode se mover em 4 direções (cima, baixo, esquerda, direita)
-        
-        IMPORTANTE:
-            A heurística deve NUNCA superestimar o custo real!
-            Isso garante que o A* encontre o caminho ótimo.
-        
-        Args:
-            posicao_atual: Onde estamos agora
-            posicao_objetivo: Onde queremos chegar
-            
-        Returns:
-            Estimativa de custo restante
-        """
         x_atual, y_atual = posicao_atual
         x_objetivo, y_objetivo = posicao_objetivo
 
@@ -201,17 +155,6 @@ class PlanejadorAEstrela:
     # ==================================================================================
 
     def obter_posicoes_vizinhas(self, posicao: Posicao) -> Iterable[Posicao]:
-        """
-        Gera as 4 posições vizinhas (cima, baixo, esquerda, direita).
-        
-        Importante: Só retorna vizinhos que estão DENTRO do mapa.
-        
-        Args:
-            posicao: Posição atual (x, y)
-            
-        Yields:
-            Cada vizinho válido (dentro do mapa)
-        """
         x, y = posicao
 
         # Define os 4 vizinhos possíveis (4 direções)
@@ -237,27 +180,7 @@ class PlanejadorAEstrela:
     # MÉTODO 5: Reconstruir o caminho (voltar do final até o início)
     # ==================================================================================
 
-    def reconstruir_caminho(
-        self,
-        posicao_final: Posicao,
-        posicao_anterior_by_posicao: Dict[Posicao, Posicao],
-    ) -> Tuple[Posicao, ...]:
-        """
-        Reconstrói o caminho completo saindo do final e voltando para o início.
-        
-        Como funciona:
-            1. Começamos na posição final
-            2. Consultamos de onde viemos (posicao_anterior_by_posicao)
-            3. Vamos voltando até chegar no início
-            4. Invertemos a ordem para ter: início -> ... -> final
-        
-        Args:
-            posicao_final: Posição de chegada
-            posicao_anterior_by_posicao: Dicionário que diz de onde viemos
-            
-        Returns:
-            Tupla ordenada com o caminho completo
-        """
+    def reconstruir_caminho(self,posicao_final: Posicao,posicao_anterior_by_posicao: Dict[Posicao, Posicao],) -> Tuple[Posicao, ...]:
         caminho_invertido: List[Posicao] = []
 
         # Começar no final
@@ -270,7 +193,6 @@ class PlanejadorAEstrela:
             caminho_invertido.append(posicao_anterior)
             posicao_atual = posicao_anterior
 
-        # Inverter para ficar: início -> ... -> fim
         caminho_invertido.reverse()
         
         return tuple(caminho_invertido)
@@ -279,27 +201,7 @@ class PlanejadorAEstrela:
     # MÉTODO PRINCIPAL: ALGORITMO A*
     # ==================================================================================
 
-    def buscar(self, posicao_inicial: Posicao, posicao_objetivo: Posicao) -> ResultadoCaminho:
-        """
-        Implementa o algoritmo A* completo.
-        
-        Fluxo geral:
-            1. Validação de entrada
-            2. Inicialização (fila, estruturas de dados)
-            3. Loop principal: mientras haya posições para explorar
-                a. Pegar melhor posição da fila
-                b. Se for o objetivo: encontramos!
-                c. Explorar vizinhos e adicionar à fila
-            4. Se sair do loop: não há caminho
-        
-        Args:
-            posicao_inicial: Ponto de partida (x, y)
-            posicao_objetivo: Ponto de chegada (x, y)
-            
-        Returns:
-            ResultadoCaminho com o caminho e que custo total
-        """
-
+    def  buscar(self, posicao_inicial: Posicao, posicao_objetivo: Posicao) -> ResultadoCaminho:
         # -----------------------------------
         # FASE 1: Validação de entrada
         # -----------------------------------
@@ -318,10 +220,6 @@ class PlanejadorAEstrela:
         # FASE 2: Inicialização da busca
         # -----------------------------------
 
-        # ESTRUTURA 1: Fila de prioridade
-        # - Sempre retorna o item com MENOR prioridade (f)
-        # - Cada item é: (prioridade_f, custo_real_g, posicao)
-        # - Usamos heapq (heap/fila de prioridade mínima)
         fila_aberta: List[Tuple[int, int, Posicao]] = []
 
         # Inicializar com a posição inicial
@@ -329,16 +227,12 @@ class PlanejadorAEstrela:
         heuristica_inicial = self.calcular_heuristica(posicao_inicial, posicao_objetivo)
         prioridade_inicial = custo_real_inicial + heuristica_inicial  # f = g + h
 
-        heappush(fila_aberta, (prioridade_inicial, custo_real_inicial, posicao_inicial))
+        heappush(fila_aberta, (prioridade_inicial, custo_real_inicial, posicao_inicial)) 
+        # Coloca o nó inicial na fila de exploração.
 
-        # ESTRUTURA 2: Dicionário para rastrear De onde viemos
-        # - Usado para reconstruir o caminho no final
-        # - Exemplo: posicao_anterior[(2, 3)] = (1, 3)  (viemos de (1,3) para (2,3))
+
         posicao_anterior_by_posicao: Dict[Posicao, Posicao] = {}
 
-        # ESTRUTURA 3: Menor custo encontrado para cada posição
-        # - Guardar o MELHOR custo que conseguimos para chegar em cada posição
-        # - Se encontramos um caminho mais barato, atualizamos
         melhor_custo_real_para_posicao: Dict[Posicao, int] = {posicao_inicial: 0}
 
         # ESTRUTURA 4: Posições que já foram processadas
@@ -352,7 +246,6 @@ class PlanejadorAEstrela:
 
         while len(fila_aberta) > 0:
 
-            # Pega a posição com MENOR pontuação f
             prioridade_atual, custo_real_atual, posicao_atual = heappop(fila_aberta)
 
             # Se já processamos esta posição, pular (não fazer nada)
@@ -362,12 +255,9 @@ class PlanejadorAEstrela:
             # Marcar como processada
             posicoes_fechadas.add(posicao_atual)
 
-            # VERIFICAÇÃO: Chegamos no objetivo?
+            #se a posicao atual que saiu da fila for o objetivo, monta o caminho final usando o dicionário de "posicao_anterior_by_posicao" e retorna o resultado 
             if posicao_atual == posicao_objetivo:
-                caminho_completo = self.reconstruir_caminho(
-                    posicao_atual,
-                    posicao_anterior_by_posicao,
-                )
+                caminho_completo = self.reconstruir_caminho(posicao_atual,posicao_anterior_by_posicao)
                 return ResultadoCaminho(caminho=caminho_completo, custo=custo_real_atual)
 
             # -----------------------------------
@@ -376,11 +266,9 @@ class PlanejadorAEstrela:
 
             for posicao_vizinha in self.obter_posicoes_vizinhas(posicao_atual):
 
-                # Pular vizinhos já processados
                 if posicao_vizinha in posicoes_fechadas:
                     continue
 
-                # Calcular custo real para chegar neste vizinho
                 custo_para_entrar_vizinha = self.custo_da_celula(posicao_vizinha)
                 novo_custo_real = custo_real_atual + custo_para_entrar_vizinha
 
@@ -388,8 +276,6 @@ class PlanejadorAEstrela:
                 melhor_custo_anterior = melhor_custo_real_para_posicao.get(posicao_vizinha)
 
                 # Encontramos caminho melhor se:
-                # - Primeira vez que vemos este vizinho, OU
-                # - Novo caminho é mais barato que o anterior
                 encontramos_caminho_melhor = (
                     melhor_custo_anterior is None or novo_custo_real < melhor_custo_anterior
                 )
@@ -418,26 +304,3 @@ class PlanejadorAEstrela:
 # ====================================================================================
 
 planejador = PlanejadorAEstrela(mapa)
-
-
-# ====================================================================================
-# FUNÇÃO PÚBLICA PARA BUSCAR CAMINHO (com cache)
-# ====================================================================================
-
-@lru_cache(maxsize=None)
-def caminho_entre(posicao_inicial: Posicao, posicao_objetivo: Posicao) -> ResultadoCaminho:
-    """
-    Função pública para encontrar caminho entre duas posições.
-    
-    Esta função usa CACHE (lru_cache) para evitar recalcular caminhos
-    que já foram calculados antes. Isto melhora MUITO a performance!
-    
-    Args:
-        posicao_inicial: Ponto de saída (x, y)
-        posicao_objetivo: Ponto de chegada (x, y)
-        
-    Returns:
-        ResultadoCaminho com o melhor caminho encontrado
-    """
-    resultado = planejador.buscar(posicao_inicial, posicao_objetivo)
-    return resultado

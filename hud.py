@@ -3,19 +3,10 @@ import math
 
 
 class HUD:
-    def __init__(self, tela, fonte, fonte_pequena, fonte_titulo, painel_largura, margem):
+    def __init__(self, tela, fonte_pequena):
         self.tela = tela
-        self.fonte = fonte
         self.fonte_pequena = fonte_pequena
-        self.fonte_titulo = fonte_titulo
-        self.painel_largura = painel_largura
-        self.margem = margem
         self.animacao_tempo = 0
-
-    def desenhar_texto(self, superficie_destino: pygame.Surface, texto: str, posicao: tuple[int, int], cor: tuple[int, int, int] = (255, 255, 255), pequena: bool = False) -> None:
-        fonte = self.fonte_pequena if pequena else self.fonte
-        superficie_texto = fonte.render(texto, True, cor)
-        superficie_destino.blit(superficie_texto, posicao)
 
     def desenhar_gradiente_vertical(self, superficie: pygame.Surface, cor_topo: tuple[int, int, int], cor_base: tuple[int, int, int], alpha: int = 255) -> None:
         largura, altura = superficie.get_size()
@@ -28,60 +19,13 @@ class HUD:
             cor = (*cor_rgb, alpha) if alpha < 255 else cor_rgb
             pygame.draw.line(superficie, cor, (0, y), (largura, y))
 
-    def desenhar_gradiente_radial(self, superficie: pygame.Surface, centro: tuple[int, int], raio: int, cor_centro: tuple[int, int, int], cor_borda: tuple[int, int, int], alpha: int = 255) -> None:
-        """Cria um gradiente radial para efeitos de brilho."""
-        for r in range(raio, 0, -1):
-            progresso = r / raio
-            cor_rgb = tuple(
-                int(cor_centro[indice] * progresso + cor_borda[indice] * (1 - progresso))
-                for indice in range(3)
-            )
-            cor = (*cor_rgb, int(alpha * progresso)) if alpha < 255 else cor_rgb
-            pygame.draw.circle(superficie, cor, centro, r)
-
     def desenhar_sombra(self, superficie: pygame.Surface, rect: pygame.Rect, raio: int = 4, alpha: int = 60) -> None:
         """Adiciona efeito de sombra suave."""
         sombra = pygame.Surface((rect.width + raio * 2, rect.height + raio * 2), pygame.SRCALPHA)
         pygame.draw.rect(sombra, (0, 0, 0, alpha), pygame.Rect(raio, raio, rect.width, rect.height), border_radius=12)
         superficie.blit(sombra, (rect.x - raio, rect.y - raio))
 
-    def _desenhar_icone_metrica(self, superficie: pygame.Surface, x: int, y: int, tipo: str, cor: tuple[int, int, int], tamanho: int = 12) -> None:
-        """Desenha ícones modernos e minimalistas para métricas."""
-        if tipo == "custo":
-            # Ícone de moeda com gradiente
-            pygame.draw.circle(superficie, cor, (x + tamanho//2, y + tamanho//2), tamanho//2)
-            pygame.draw.circle(superficie, (255, 255, 255), (x + tamanho//2, y + tamanho//2), tamanho//4)
-            pygame.draw.line(superficie, (255, 255, 255), (x + tamanho//2, y + 2), (x + tamanho//2, y + tamanho - 2), 1)
-        elif tipo == "tempo":
-            # Ícone de relógio moderno
-            pygame.draw.circle(superficie, cor, (x + tamanho//2, y + tamanho//2), tamanho//2, 1)
-            # Ponteiro
-            angulo = math.pi / 4
-            px = x + tamanho//2 + int((tamanho//3) * math.cos(angulo))
-            py = y + tamanho//2 + int((tamanho//3) * math.sin(angulo))
-            pygame.draw.line(superficie, cor, (x + tamanho//2, y + tamanho//2), (px, py), 2)
-        elif tipo == "radar":
-            # Ícone de radar com ondas
-            pygame.draw.circle(superficie, cor, (x + tamanho//2, y + tamanho//2), tamanho//2, 1)
-            pygame.draw.circle(superficie, cor, (x + tamanho//2, y + tamanho//2), tamanho//4, 1)
-            pygame.draw.line(superficie, cor, (x + tamanho//2, y + tamanho//2 - tamanho//4), (x + tamanho//2, y + tamanho//2 + tamanho//4), 1)
-        elif tipo == "esfera":
-            # Ícone de esfera com brilho
-            pygame.draw.circle(superficie, cor, (x + tamanho//2, y + tamanho//2), tamanho//2)
-            pygame.draw.circle(superficie, (255, 255, 255), (x + tamanho//2 - 1, y + tamanho//2 - 1), tamanho//4)
-        elif tipo == "velocidade":
-            # Ícone de velocidade (seta com movimento)
-            pontos = [(x + 2, y + tamanho//2), (x + tamanho - 2, y + 2), (x + tamanho - 2, y + tamanho - 2)]
-            pygame.draw.polygon(superficie, cor, pontos)
-            # Linha de movimento
-            pygame.draw.line(superficie, cor, (x + tamanho//2, y + tamanho//2), (x + tamanho + 4, y + tamanho//2), 1)
-        elif tipo == "fase":
-            # Ícone de mapa (grade)
-            pygame.draw.rect(superficie, cor, (x + 1, y + 1, tamanho - 2, tamanho - 2), 1)
-            pygame.draw.line(superficie, cor, (x + tamanho//2, y + 1), (x + tamanho//2, y + tamanho - 1), 1)
-            pygame.draw.line(superficie, cor, (x + 1, y + tamanho//2), (x + tamanho - 1, y + tamanho//2), 1)
-
-    def desenhar_chip_metrica_moderno(self, superficie: pygame.Surface, rect: pygame.Rect, titulo: str, valor: str, cor_icone: tuple[int, int, int], tipo_icone: str, hover: bool = False) -> None:
+    def desenhar_chip_metrica_moderno(self, superficie: pygame.Surface, rect: pygame.Rect, titulo: str, valor: str, hover: bool = False) -> None:
         """Chip de métrica com design limpo e elegante."""
         # Sombra suave para profundidade
         self.desenhar_sombra(superficie, rect, raio=2, alpha=25)
@@ -114,7 +58,7 @@ class HUD:
 
         superficie.blit(chip, rect.topleft)
 
-    def desenhar_botao_moderno(self, superficie: pygame.Surface, rect: pygame.Rect, titulo: str, subtitulo: str, cor_base: tuple[int, int, int], cor_acento: tuple[int, int, int], hover: bool, icone_tipo: str = None) -> None:
+    def desenhar_botao_moderno(self, superficie: pygame.Surface, rect: pygame.Rect, titulo: str, cor_base: tuple[int, int, int], hover: bool, icone_tipo: str = None) -> None:
         """Botão com design limpo e elegante."""
         # Sombra sutil
         sombra_alpha = 35 if hover else 20
@@ -193,12 +137,12 @@ class HUD:
 
         # Métricas organizadas em chips modernos - reduzidas para evitar poluição
         metricas = [
-            ("Custo", f"{simulacao.custo_acumulado}", (255, 193, 77), "custo"),
-            ("Tempo", simulacao.formatar_tempo(simulacao.tempo_decorrido_ms()), (132, 187, 245), "tempo"),
-            ("Esferas", f"{len(simulacao.esferas_coletadas)}/{simulacao.quantidade_esferas}", (119, 219, 155), "esfera"),
-            ("Rota", simulacao.texto_rota_em_andamento(), (255, 208, 143), "fase"),
-            ("Velocidade", f"{simulacao.movimento_fps} fps", (186, 196, 245), "velocidade"),
-            ("Fase", simulacao.fase_atual(), (160, 213, 245), "fase"),
+            ("Custo", f"{simulacao.custo_acumulado}"),
+            ("Tempo", simulacao.formatar_tempo(simulacao.tempo_decorrido_ms())),
+            ("Esferas", f"{len(simulacao.esferas_coletadas)}/{simulacao.quantidade_esferas}"),
+            ("Rota", simulacao.texto_rota_em_andamento()),
+            ("Velocidade", f"{simulacao.movimento_fps} fps"),
+            ("Fase", simulacao.fase_atual()),
         ]
 
         # Layout inteligente das métricas
@@ -212,7 +156,7 @@ class HUD:
         mouse_x, mouse_y = pygame.mouse.get_pos()
         mouse_local = (mouse_x, mouse_y - y_barra)
 
-        for titulo, valor, cor_icone, tipo_icone in metricas:
+        for titulo, valor in metricas:
             titulo_surface = self.fonte_pequena.render(f"{titulo}: {valor}", True, (240, 245, 252))
             largura_chip = titulo_surface.get_width() + 40
             rect_chip = pygame.Rect(x_atual, y_linha_2 if segunda_linha else y_linha_1, largura_chip, 40)
@@ -227,7 +171,7 @@ class HUD:
                     continue
 
             hover = rect_chip.collidepoint(mouse_local)
-            self.desenhar_chip_metrica_moderno(barra, rect_chip, titulo, valor, cor_icone, tipo_icone, hover)
+            self.desenhar_chip_metrica_moderno(barra, rect_chip, titulo, valor, hover)
             x_atual += largura_chip + 14
 
         # Botões elegantes
@@ -253,9 +197,7 @@ class HUD:
             barra,
             botao_mais_devagar,
             "Mais Lento",
-            "",
             (175, 130, 76),
-            (199, 155, 98),
             hover_lento,
             None,
         )
@@ -263,9 +205,7 @@ class HUD:
             barra,
             botao_mais_rapido,
             "Mais Rápido",
-            "",
             (102, 174, 133),
-            (134, 204, 164),
             hover_rapido,
             None,
         )
@@ -273,9 +213,7 @@ class HUD:
             barra,
             botao_toggle_esferas,
             "Ocultar" if simulacao.mostrar_esferas_ocultas else "Mostrar",
-            "Esferas",
             (110, 132, 190),
-            (140, 160, 214),
             hover_toggle,
             None,
         )
@@ -301,26 +239,3 @@ class HUD:
             "mais_rapido": botao_mais_rapido.move(0, y_barra),
             "toggle_esferas": botao_toggle_esferas.move(0, y_barra),
         }
-
-    def desenhar_botao(self, superficie: pygame.Surface, rect: pygame.Rect, titulo: str, subtitulo: str, cor_base: tuple[int, int, int], cor_borda: tuple[int, int, int]) -> None:
-        fundo = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
-        cor_top = tuple(min(255, int(c * 1.2)) for c in cor_base)
-        cor_bot = tuple(max(0, int(c * 0.75)) for c in cor_base)
-        self.desenhar_gradiente_vertical(fundo, cor_top, cor_bot, alpha=200)
-        pygame.draw.rect(fundo, (*cor_borda, 170), fundo.get_rect(), 2, border_radius=13)
-        pygame.draw.rect(fundo, (255, 255, 255, 35), fundo.get_rect().inflate(-4, -4), 1, border_radius=11)
-        superficie.blit(fundo, rect.topleft)
-
-        titulo_surface = self.fonte_pequena.render(titulo, True, (245, 248, 250))
-        if subtitulo:
-            subtitulo_surface = self.fonte_pequena.render(subtitulo, True, (220, 225, 230))
-            titulo_x = rect.x + 10
-            titulo_y = rect.y + 4
-            superficie.blit(titulo_surface, (titulo_x, titulo_y))
-            superficie.blit(subtitulo_surface, (titulo_x, titulo_y + 16))
-        else:
-            texto_rect = titulo_surface.get_rect(center=rect.center)
-            superficie.blit(titulo_surface, texto_rect)
-
-    def desenhar_separador(self, superficie: pygame.Surface, y: int, largura: int) -> None:
-        pygame.draw.line(superficie, (120, 135, 155, 80), (18, y), (largura - 18, y), 1)
