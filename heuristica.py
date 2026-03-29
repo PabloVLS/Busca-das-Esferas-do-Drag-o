@@ -1,30 +1,3 @@
-"""
-================================================================================
-ALGORITMO A* (A-ESTRELA) - VERSÃO DIDÁTICA
-================================================================================
-
-Objetivo: Encontrar um caminho de menor custo entre dois pontos no mapa.
-
-Ideia principal do A*:
-    Para cada posição, calculamos uma pontuação total:
-    
-        f(posição) = g(posição) + h(posição)
-    
-    Onde:
-        g(posição) = custo REAL acumulado para chegar até aqui
-        h(posição) = ESTIMATIVA de custo restante até o objetivo (heurística)
-
-    O A* sempre escolhe a posição com menor f(posição) para explorar próximo.
-
-Terrenos no mapa (mapa_config.py):
-    - 0 = água (custo: 10 - caro, o agente evita)
-    - 1 = grama (custo: 1 - barato, preferido)
-    - 2 = montanha (custo: 60 - muito caro, o agente evita muito)
-    - 3 = Ilha do Mestre Kame (início, custo: 1)
-
-================================================================================
-"""
-
 from dataclasses import dataclass
 from heapq import heappop, heappush
 from typing import Dict, Iterable, List, Set, Tuple
@@ -84,12 +57,6 @@ class PlanejadorAEstrela:
     """
 
     def __init__(self, mapa_terreno):
-        """
-        Inicializa o planejador com um mapa.
-        
-        Args:
-            mapa_terreno: Matriz 2D onde cada elemento é um tipo de terreno
-        """
         if mapa_terreno is None:
             raise ValueError("O mapa de terreno não pode ser None.")
 
@@ -202,67 +169,38 @@ class PlanejadorAEstrela:
     # ==================================================================================
 
     def  buscar(self, posicao_inicial: Posicao, posicao_objetivo: Posicao) -> ResultadoCaminho:
-        # -----------------------------------
-        # FASE 1: Validação de entrada
-        # -----------------------------------
-
         if not self.posicao_esta_dentro_do_mapa(posicao_inicial):
             raise ValueError(f"Posição inicial fora do mapa: {posicao_inicial}")
 
         if not self.posicao_esta_dentro_do_mapa(posicao_objetivo):
             raise ValueError(f"Posição objetivo fora do mapa: {posicao_objetivo}")
 
-        # Caso especial: já estamos no objetivo
         if posicao_inicial == posicao_objetivo:
             return ResultadoCaminho(caminho=(posicao_inicial,), custo=0)
 
-        # -----------------------------------
-        # FASE 2: Inicialização da busca
-        # -----------------------------------
-
         fila_aberta: List[Tuple[int, int, Posicao]] = []
-
-        # Inicializar com a posição inicial
         custo_real_inicial = 0  # g(inicial) = 0
         heuristica_inicial = self.calcular_heuristica(posicao_inicial, posicao_objetivo)
         prioridade_inicial = custo_real_inicial + heuristica_inicial  # f = g + h
-
         heappush(fila_aberta, (prioridade_inicial, custo_real_inicial, posicao_inicial)) 
         # Coloca o nó inicial na fila de exploração.
 
-
         posicao_anterior_by_posicao: Dict[Posicao, Posicao] = {}
-
         melhor_custo_real_para_posicao: Dict[Posicao, int] = {posicao_inicial: 0}
-
-        # ESTRUTURA 4: Posições que já foram processadas
-        # - Uma vez que processamos uma posição, não processamos novamente
-        # - Isso garante eficiência (evita explorar o mesmo nó duas vezes)
         posicoes_fechadas: Set[Posicao] = set()
-
-        # -----------------------------------
-        # FASE 3: Loop principal do A*
-        # -----------------------------------
 
         while len(fila_aberta) > 0:
 
             prioridade_atual, custo_real_atual, posicao_atual = heappop(fila_aberta)
-
-            # Se já processamos esta posição, pular (não fazer nada)
             if posicao_atual in posicoes_fechadas:
                 continue
 
-            # Marcar como processada
             posicoes_fechadas.add(posicao_atual)
 
             #se a posicao atual que saiu da fila for o objetivo, monta o caminho final usando o dicionário de "posicao_anterior_by_posicao" e retorna o resultado 
             if posicao_atual == posicao_objetivo:
                 caminho_completo = self.reconstruir_caminho(posicao_atual,posicao_anterior_by_posicao)
                 return ResultadoCaminho(caminho=caminho_completo, custo=custo_real_atual)
-
-            # -----------------------------------
-            # Explorar vizinhos
-            # -----------------------------------
 
             for posicao_vizinha in self.obter_posicoes_vizinhas(posicao_atual):
 
@@ -275,22 +213,17 @@ class PlanejadorAEstrela:
                 # Verificar se encontramos um caminho MELHOR para este vizinho
                 melhor_custo_anterior = melhor_custo_real_para_posicao.get(posicao_vizinha)
 
-                # Encontramos caminho melhor se:
                 encontramos_caminho_melhor = (
                     melhor_custo_anterior is None or novo_custo_real < melhor_custo_anterior
                 )
 
                 if encontramos_caminho_melhor:
-
                     # Atualizar dados do vizinho
                     melhor_custo_real_para_posicao[posicao_vizinha] = novo_custo_real
                     posicao_anterior_by_posicao[posicao_vizinha] = posicao_atual
-
                     # Calcular prioridade para este vizinho
                     heuristica_vizinha = self.calcular_heuristica(posicao_vizinha, posicao_objetivo)
                     prioridade_vizinha = novo_custo_real + heuristica_vizinha
-
-                    # Adicionar na fila
                     heappush(fila_aberta, (prioridade_vizinha, novo_custo_real, posicao_vizinha))
 
         # Se saiu do loop: não encontrou caminho

@@ -76,8 +76,8 @@ class Mapa:
         for posicao in self.celulas_no_alcance_do_radar(posicao_atual):
             if posicao not in self.celulas_conhecidas:
                 novas_celulas.add(posicao)
-            self.celulas_conhecidas.add(posicao)
-            self.terreno_conhecido[posicao] = mapa[posicao[1]][posicao[0]]
+            self.celulas_conhecidas.add(posicao)# guarda posiçoes reveladas
+            self.terreno_conhecido[posicao] = mapa[posicao[1]][posicao[0]] # guarda o tipo de terreno revelado
         return novas_celulas
 
     def detectar_fronteiras(self) -> set[Posicao]:
